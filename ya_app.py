@@ -1,8 +1,8 @@
-import streamlit as st
-import openpyxl
 import os
 import re
 import socket
+import openpyxl
+import streamlit as st
 import streamlit.components.v1 as components
 
 st.set_page_config(page_title="야적장 제품 위치 검색 시스템", layout="wide")
@@ -32,23 +32,32 @@ st.info(f"""
 
 st.markdown("---")
 
-# 1. 엑셀 파일 업로드/선택 기능
-uploaded_file = st.sidebar.file_uploader("📂 엑셀 파일(.xlsx) 선택", type=["xlsx"])
+# 1. 엑셀 파일 업로드/선택 기능 (data.xlsx 자동 로드 반영)
+uploaded_file = st.sidebar.file_uploader("📂 엑셀 파일(.xlsx) 선택 (선택 사항)", type=["xlsx"])
 
-# 파일 경로 결정 (업로드된 파일 우선, 없으면 기본 경로)
+# 파일 경로 결정 (업로드 파일 우선 -> 없으면 GitHub의 data.xlsx -> 둘 다 없으면 기존 로컬/다운로드 경로)
 EXCEL_FILE = None
+
 if uploaded_file is not None:
+    # 1. 웹에서 파일 직접 업로드한 경우
     temp_dir = os.path.join(os.path.expanduser("~"), "Downloads")
     os.makedirs(temp_dir, exist_ok=True)
     EXCEL_FILE = os.path.join(temp_dir, "temp_yard_layout.xlsx")
     with open(EXCEL_FILE, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    st.sidebar.success(f"✅ 선택된 파일: {uploaded_file.name}")
+    st.sidebar.success(f"✅ 업로드 파일 적용: {uploaded_file.name}")
+
+elif os.path.exists("data.xlsx"):
+    # 2. 업로드가 없지만 GitHub 저장소에 data.xlsx가 존재하는 경우 (24시간 상시 자동 로드)
+    EXCEL_FILE = "data.xlsx"
+    st.sidebar.info("ℹ️ GitHub 기본 파일(data.xlsx) 로드 완료")
+
 else:
+    # 3. 로컬 테스트용 기존 경로 호환
     default_path = os.path.join(os.path.expanduser("~"), "Downloads", "12321341234.xlsx")
     if os.path.exists(default_path):
         EXCEL_FILE = default_path
-        st.sidebar.info("ℹ️️ 기본 엑셀 파일을 불러왔습니다.")
+        st.sidebar.info("ℹ️ 로컬 기본 엑셀 파일을 불러왔습니다.")
 
 def get_hex_color(color_obj):
     if not color_obj:
@@ -162,19 +171,18 @@ def is_exact_match(search_query, cell_text):
         return True
 
     # 2. 공백(스페이스바)이 있으면 하이픈(-)으로 변환
-    # 예: "401 11 1" -> "401-11-1"
     target_query = clean_query
     if " " in clean_query:
         target_query = "-".join(re.split(r'\s+', clean_query))
 
-    # 3. 하이픈이 포함된 키워드 매칭 (공백 변환 결과 포함)
+    # 3. 하이픈이 포함된 키워드 매칭
     if "-" in target_query:
         escaped_query = re.escape(target_query)
         pattern = r'(?<![0-9a-zA-Z가-힣_])' + escaped_query + r'(?![0-9a-zA-Z가-힣_])'
         if re.search(pattern, cell_str, re.IGNORECASE):
             return True
 
-    # 4. 공백/하이픈 없이 연속된 숫자만 들어온 경우 (예: "401111")
+    # 4. 공백/하이픈 없이 연속된 숫자만 들어온 경우
     if clean_query.isdigit():
         possible_hyphen_formats = generate_possible_hyphen_patterns(clean_query)
         for fmt in possible_hyphen_formats:
@@ -193,7 +201,7 @@ def is_exact_match(search_query, cell_text):
 
 # 메인 UI 및 화면 출력 부분
 if not EXCEL_FILE or not os.path.exists(EXCEL_FILE):
-    st.warning("👈 왼쪽 사이드바에서 배치도 엑셀(.xlsx) 파일을 선택해 주세요.")
+    st.warning("👈 등록된 엑셀 파일이 없습니다. GitHub 저장소에 'data.xlsx' 파일을 업로드하거나, 왼쪽 사이드바에서 배치도 엑셀(.xlsx) 파일을 선택해 주세요.")
 else:
     col1, col2 = st.columns([3, 1])
     with col1:
