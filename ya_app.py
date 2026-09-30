@@ -215,12 +215,15 @@ else:
     <!DOCTYPE html>
     <html>
     <head>
+    <!-- 핸드폰 손가락 터치 최대 50배 확대/축소 허용 설정 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=50.0, user-scalable=yes">
     <style>
         body {{
             font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
             margin: 0;
             padding: 5px;
             background-color: #ffffff;
+            touch-action: manipulation;
         }}
         .table-container {{
             overflow-x: auto;
@@ -287,7 +290,7 @@ else:
 
     html.append('</table></div></body></html>')
 
-    st.subheader(f"🗺️ 야적장 원본 전체 배치도 (현재 배율: {zoom_level}%)")
+    st.subheader(f"🗺️️ 야적장 원본 전체 배치도 (현재 배율: {zoom_level}%)")
     components.html("".join(html), height=850, scrolling=True)
 
     if search_term:
