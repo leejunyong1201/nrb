@@ -35,11 +35,9 @@ st.markdown("---")
 # 1. 엑셀 파일 업로드/선택 기능 (data.xlsx 자동 로드 반영)
 uploaded_file = st.sidebar.file_uploader("📂 엑셀 파일(.xlsx) 선택 (선택 사항)", type=["xlsx"])
 
-# 파일 경로 결정 (업로드 파일 우선 -> 없으면 GitHub의 data.xlsx -> 둘 다 없으면 기존 로컬/다운로드 경로)
 EXCEL_FILE = None
 
 if uploaded_file is not None:
-    # 1. 웹에서 파일 직접 업로드한 경우
     temp_dir = os.path.join(os.path.expanduser("~"), "Downloads")
     os.makedirs(temp_dir, exist_ok=True)
     EXCEL_FILE = os.path.join(temp_dir, "temp_yard_layout.xlsx")
@@ -48,12 +46,10 @@ if uploaded_file is not None:
     st.sidebar.success(f"✅ 업로드 파일 적용: {uploaded_file.name}")
 
 elif os.path.exists("data.xlsx"):
-    # 2. 업로드가 없지만 GitHub 저장소에 data.xlsx가 존재하는 경우 (24시간 상시 자동 로드)
     EXCEL_FILE = "data.xlsx"
     st.sidebar.info("ℹ️ GitHub 기본 파일(data.xlsx) 로드 완료")
 
 else:
-    # 3. 로컬 테스트용 기존 경로 호환
     default_path = os.path.join(os.path.expanduser("~"), "Downloads", "12321341234.xlsx")
     if os.path.exists(default_path):
         EXCEL_FILE = default_path
@@ -130,10 +126,6 @@ def load_excel_full_style(file_path):
     return matrix
 
 def generate_possible_hyphen_patterns(digits):
-    """
-    규칙: 앞 3자리=동, 가운데 1~2자리=층, 마지막 1~2자리(1~14)=번호
-    예: '401111' -> ['401-11-1', '401-1-11']
-    """
     patterns = []
     if len(digits) >= 5 and digits[:3].isdigit():
         dong = digits[:3]
@@ -166,23 +158,19 @@ def is_exact_match(search_query, cell_text):
 
     cell_str = str(cell_text).strip()
 
-    # 1. 원본 문자열 완전 일치 확인
     if clean_query.lower() == cell_str.lower():
         return True
 
-    # 2. 공백(스페이스바)이 있으면 하이픈(-)으로 변환
     target_query = clean_query
     if " " in clean_query:
         target_query = "-".join(re.split(r'\s+', clean_query))
 
-    # 3. 하이픈이 포함된 키워드 매칭
     if "-" in target_query:
         escaped_query = re.escape(target_query)
         pattern = r'(?<![0-9a-zA-Z가-힣_])' + escaped_query + r'(?![0-9a-zA-Z가-힣_])'
         if re.search(pattern, cell_str, re.IGNORECASE):
             return True
 
-    # 4. 공백/하이픈 없이 연속된 숫자만 들어온 경우
     if clean_query.isdigit():
         possible_hyphen_formats = generate_possible_hyphen_patterns(clean_query)
         for fmt in possible_hyphen_formats:
@@ -191,7 +179,6 @@ def is_exact_match(search_query, cell_text):
             if re.search(pattern, cell_str, re.IGNORECASE):
                 return True
 
-    # 5. 셀 내 일반 단어/문자열 단위 비교
     tokens = re.split(r'[\s/,\n\r]+', cell_str)
     for token in tokens:
         if clean_query.lower() == token.strip().lower():
@@ -215,7 +202,6 @@ else:
     <!DOCTYPE html>
     <html>
     <head>
-    <!-- 핸드폰 손가락 터치 최대 50배 확대/축소 허용 설정 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=50.0, user-scalable=yes">
     <style>
         body {{
@@ -223,13 +209,20 @@ else:
             margin: 0;
             padding: 5px;
             background-color: #ffffff;
-            touch-action: manipulation;
+            touch-action: none;
+            overflow: auto;
+        }}
+        .viewport-wrapper {{
+            overflow: auto;
+            max-width: 100%;
+            max-height: 800px;
+            position: relative;
         }}
         .table-container {{
-            overflow-x: auto;
-            max-width: 100%;
-            transform-origin: top left;
+            transform-origin: 0 0;
             zoom: {zoom_level}%;
+            display: inline-block;
+            transition: transform 0.05s ease-out;
         }}
         table {{
             border-collapse: collapse;
@@ -257,7 +250,9 @@ else:
     </style>
     </head>
     <body>
-    <div class="table-container"><table>
+    <div class="viewport-wrapper" id="viewport">
+        <div class="table-container" id="target">
+            <table>
     ''']
 
     matched_items = []
@@ -288,9 +283,51 @@ else:
             html.append(f'<td{span_attr}{class_attr}{style_attr}>{val}</td>')
         html.append('</tr>')
 
-    html.append('</table></div></body></html>')
+    html.append('''
+            </table>
+        </div>
+    </div>
 
-    st.subheader(f"🗺️️ 야적장 원본 전체 배치도 (현재 배율: {zoom_level}%)")
+    <!-- 모바일 터치 손가락 줌(Pinch-to-zoom) 스크립트 -->
+    <script>
+        const viewport = document.getElementById('viewport');
+        const target = document.getElementById('target');
+        
+        let currentScale = 1;
+        let startDist = 0;
+        let initialScale = 1;
+
+        viewport.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                startDist = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                initialScale = currentScale;
+            }
+        }, { passive: false });
+
+        viewport.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const dist = Math.hypot(
+                    e.touches[0].pageX - e.touches[1].pageX,
+                    e.touches[0].pageY - e.touches[1].pageY
+                );
+                if (startDist > 0) {
+                    const factor = dist / startDist;
+                    currentScale = Math.min(Math.max(initialScale * factor, 0.5), 50.0);
+                    target.style.transform = `scale(${currentScale})`;
+                }
+            }
+        }, { passive: false });
+    </script>
+    </body>
+    </html>
+    ''')
+
+    st.subheader(f"🗺 야적장 원본 전체 배치도 (기본 배율: {zoom_level}%)")
     components.html("".join(html), height=850, scrolling=True)
 
     if search_term:
